@@ -81,7 +81,31 @@ docker compose --env-file .env \
   up -d --no-build --pull never
 ```
 
+### 公网 IP 直连模式（临时，HTTP 明文）
+
+Cloudflare Quick Tunnel 在中国大陆没有节点，国内用户的流量会绕行海外（例如洛杉矶）再回到 ECS，大文件上传（ABC Excel）容易中途断开，报 `Incoming request ended abruptly: context canceled`。国内用户使用时，可先让 Compose 内的 Nginx 直接监听 ECS 公网 80 端口：
+
+1. 在 `.env` 中设置：
+   ```bash
+   APP_PROXY_BIND=0.0.0.0
+   APP_PROXY_PORT=80
+   APP_ORIGIN=http://<ECS 公网 IP>
+   ```
+2. 确认宿主机 80 端口空闲：`ss -ltnp | grep ':80 '`（无输出即空闲）。
+3. 阿里云控制台 → ECS → 安全组 → 入方向放行 `TCP 80`（授权对象可先限定为办公网出口 IP）。
+4. 停用 Quick Tunnel 并重建 proxy：
+   ```bash
+   docker compose --env-file .env -f docker-compose.production.yml stop cloudflared
+   docker compose --env-file .env -f docker-compose.production.yml up -d --no-deps --force-recreate proxy backend
+   curl -fsS http://127.0.0.1/health
+   ```
+   使用离线镜像部署时，同样追加 `-f deploy/compose.production.ecs-amd64.yml`，并加上 `--no-build --pull never`。
+
+> 该模式下账号密码与客户/患者数据以明文 HTTP 传输，仅适合短期内部试用。正式使用请完成域名 ICP 备案并配置 HTTPS（443）。恢复仅本机访问：删除 `.env` 中的 `APP_PROXY_BIND` / `APP_PROXY_PORT` 后重建 proxy，并关闭安全组 80 端口。
+
 ### 按需启用临时 HTTPS Quick Tunnel（无需开放安全组入站端口）
+
+> 仅适合海外访问或临时演示；国内用户请使用上面的公网 IP 直连或正式 HTTPS 域名。
 
 ```bash
 docker compose --profile quick-tunnel --env-file .env -f docker-compose.production.yml up -d cloudflared
