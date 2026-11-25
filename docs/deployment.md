@@ -81,6 +81,10 @@ docker compose --env-file .env \
   up -d --no-build --pull never
 ```
 
+### 宿主机 Nginx 独立端口 HTTPS（推荐，80/443 已被其他站点占用时）
+
+若 ECS 宿主机已有 Nginx 占用 80/443，且 `/etc/letsencrypt/live/` 下已有该 IP 或域名的证书，可在宿主机 Nginx 增加一个独立端口（默认 `8443`）的站点，复用证书并反向代理到 `127.0.0.1:8080`，Compose 保持仅本机监听，不影响已有站点。模板见 [`deploy/host-nginx.customer-assets.conf`](../deploy/host-nginx.customer-assets.conf)，文件头部注释包含安装步骤；安全组放行 `TCP 8443` 后访问 `https://<ECS 公网 IP>:8443`。Let's Encrypt IP 证书有效期很短（约 6 天），需确认 `certbot renew` 定时任务正常且续期后会重载 Nginx。
+
 ### 公网 IP 直连模式（临时，HTTP 明文）
 
 Cloudflare Quick Tunnel 在中国大陆没有节点，国内用户的流量会绕行海外（例如洛杉矶）再回到 ECS，大文件上传（ABC Excel）容易中途断开，报 `Incoming request ended abruptly: context canceled`。国内用户使用时，可先让 Compose 内的 Nginx 直接监听 ECS 公网 80 端口：
